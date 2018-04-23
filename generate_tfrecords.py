@@ -82,6 +82,19 @@ def main(config):
 
     if config.max_samples > 0:
         all_jpgs = all_jpgs[:config.max_samples]
+    elif config.split_equal:
+        # Filter out clear and foggy
+        # 0 is clear, 1 is foggy
+        clear_jpgs = []
+        foggy_jpgs = []
+        for jpg in jpgs:
+            if jpg[1]:
+                foggy_jpgs.append(jpg)
+            else:
+                clear_jpgs.append(jpg)
+        all_jpgs = foggy_jpgs.extend(clear_jpgs[:len(foggy_jpgs)])
+        random.shuffle(all_jpgs)
+        print(f"Images in total: {len(all_jpgs)}")
     
     full_records = len(all_jpgs) // config.samples_per_file
     for i in range(full_records):
@@ -106,6 +119,8 @@ if __name__ == '__main__':
                         help='Prefix for the produced files')
     parser.add_argument('--max-samples', default=-1, type=int,
                         help='Max number of samples to convert to TFRecords')
+    parser.add_argument('--split_equal', action='store_true',
+                        help='Use all foggy images and sample as many clear')
     parser.add_argument('--samples-per-file', default=15000, type=int,
                         help='Number of samples to store in a file')
     parser.add_argument('-ai', '--add-inverse-channel', action='store_true',
