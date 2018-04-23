@@ -7,6 +7,8 @@ import numpy as np
 import tensorflow as tf
 import skimage.io as io
 
+from color_converter import rgb_to_hsv
+
 #             0           1
 labels = ['../data/valid/clear', '../data/valid/foggy']
 
@@ -33,18 +35,36 @@ def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
     
 
-def write_images_to_tfrecord(image_paths, dest):
+def _add_inverse_channel(img):
+    inverse = np.concatenate([img, 1-img], axis=2)
+    shape = inverse.shape
+
+    inverse = inverse.reshape((shape[0], shape[1], 2, 3))
+    inverse = np.transpose(inverse, [0, 1, 3, 2])
+
+    inverse = np.max(inverse, axis=3)
+    inverse = (inverse - 0.5) * 2
+
+    hsv_img = rgb_to_hsv(img)
+    hsv_inverse = rgb_to_hsv(inverse)
+
+    difference = np.abs(hsv_img[:,:,0] - hsv_inverse[:,:,0]).reshape((shape[0], shape[1], 1))
+    diff_uint8 = (difference * 255).astype(np.uint8)
+
+    return np.concatenate([img, diff_uint8], axis=2)
+
+    
+def write_images_to_tfrecord(image_paths, dest, config):
     writer = tf.python_io.TFRecordWriter(dest)
     
     for (image_path, label) in image_paths:
         img = io.imread(image_path)
-        height, width, depth = img.shape
+
+        if config.add_inverse_channel:
+            img = _add_inverse_channel(img)
         
-        img_raw = tf.compat.as_bytes(img.tostring())
-        
+        img_raw = tf.compat.as_bytes(img.tostring())        
         example = tf.train.Example(features=tf.train.Features(feature={
-            'height': _int64_feature(height),
-            'width': _int64_feature(width),
             'label': _int64_feature(label),
             'image_raw': _bytes_feature(img_raw)
         }))
@@ -52,6 +72,10 @@ def write_images_to_tfrecord(image_paths, dest):
     writer.close()
     print(f"Wrote {len(image_paths)} images to {dest}")
 
+def _output_path(config, i):
+    addition = "_d4" if config.add_inverse_channel else "_d3"
+    return os.path.join(config.destination, f'{config.prefix}-{i+1}{addition}.tfrecords')
+    
 def main(config):
     all_jpgs = find_all_jpgs()
     random.shuffle(all_jpgs)
@@ -62,10 +86,12 @@ def main(config):
     full_records = len(all_jpgs) // config.samples_per_file
     for i in range(full_records):
         write_images_to_tfrecord(all_jpgs[i*config.samples_per_file:(i+1)*config.samples_per_file],
-                                 os.path.join(config.destination, f'{config.prefix}-{i+1}.tfrecords'))
+                                 _output_path(config, i),
+                                 config)
 
     write_images_to_tfrecord(all_jpgs[full_records*config.samples_per_file:],
-                             os.path.join(config.destination, f'{config.prefix}-{full_records + 1}.tfrecords'))
+                             _output_path(config, full_records),
+                             config)
 
 
 if __name__ == '__main__':
@@ -82,6 +108,9 @@ if __name__ == '__main__':
                         help='Max number of samples to convert to TFRecords')
     parser.add_argument('--samples-per-file', default=15000, type=int,
                         help='Number of samples to store in a file')
+    parser.add_argument('-ai', '--add-inverse-channel', action='store_true',
+                        help='Add the semi-inverse of the image to the data')
+    
     args = parser.parse_args()
         
     main(args)

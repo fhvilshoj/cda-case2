@@ -1,5 +1,6 @@
 import tensorflow as tf
 import skimage.io as io
+import re
 
 IMAGE_HEIGHT = 272
 IMAGE_WIDTH = 384
@@ -17,19 +18,18 @@ def read_and_decode(input_files, num_epochs=10, batch_size=5):
     features = tf.parse_single_example(
         serialized_example,
         features={
-            'height': tf.FixedLenFeature([], tf.int64),
-            'width': tf.FixedLenFeature([], tf.int64),
             'label': tf.FixedLenFeature([], tf.int64),
             'image_raw': tf.FixedLenFeature([], tf.string)
         })
 
     image = tf.decode_raw(features['image_raw'], tf.uint8)
-
-    height = tf.cast(features['height'], tf.int32)
-    width = tf.cast(features['width'], tf.int32)
+    image = (tf.cast(image, dtype=tf.float32)-127.5)/127.5
     label = tf.cast(features['label'], tf.int32)
 
-    image_shape = tf.stack([IMAGE_HEIGHT, IMAGE_WIDTH, 3])
+    pattern = r'.*_d(?P<depth>\d+)'
+    image_depth = int(re.match(pattern, input_files[0]).group('depth'))
+    image_shape = tf.stack([IMAGE_HEIGHT, IMAGE_WIDTH, image_depth])
+    
     image = tf.reshape(image, image_shape)
 
     images, labels = tf.train.shuffle_batch(
