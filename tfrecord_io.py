@@ -8,8 +8,10 @@ IMAGE_WIDTH = 384
 tfrecord = '../data/tfrecords/test3-1.tfrecords'
 
 def read_and_decode(input_files, num_epochs=10, batch_size=5):
+    print(input_files)
     filename_queue = tf.train.string_input_producer(
         input_files, num_epochs=num_epochs)
+    print(filename_queue)
     
     reader = tf.TFRecordReader()
 
@@ -35,9 +37,9 @@ def read_and_decode(input_files, num_epochs=10, batch_size=5):
     images, labels = tf.train.shuffle_batch(
         [image, label],
         batch_size=batch_size,
-        capacity=30,
-        num_threads=2,
-        min_after_dequeue=10)
+        capacity=200,
+        num_threads=1,
+        min_after_dequeue=150)
     
     return images, labels
 
